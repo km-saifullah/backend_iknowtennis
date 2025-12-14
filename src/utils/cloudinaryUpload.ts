@@ -13,8 +13,6 @@ cloudinary.v2.config({
   api_secret: cloudinaryApiSecret,
 });
 
-console.log(cloudinaryCloudName, cloudinaryApiKey, cloudinaryApiSecret);
-
 export interface CloudinaryResponse {
   url: string;
   publicId: string;
