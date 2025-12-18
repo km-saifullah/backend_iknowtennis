@@ -5,6 +5,7 @@ import authRouter from "./routes/auth.routes";
 import quizCategoryRouter from "./routes/quizCategory.routes";
 import subscriptionPlanRouter from "./routes/subscription.routes";
 import quizRouter from "./routes/quiz.routes";
+import userRoouter from "./routes/user.routes";
 
 const app = express();
 
@@ -30,6 +31,9 @@ app.use("/api/v1/subscription-plan", subscriptionPlanRouter);
 
 // quiz routes
 app.use("/api/v1/quiz", quizRouter);
+
+// user routes
+app.use("/api/v1/user", userRoouter);
 
 // global error handler
 app.use(errorHandler);
