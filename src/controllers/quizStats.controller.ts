@@ -3,14 +3,10 @@ import mongoose from "mongoose";
 import { AppError } from "../utils/AppError";
 import { QuizAttempt } from "../models/quizAttempt.model";
 import { redisClient } from "../config/redis";
-
-interface AuthenticatedRequest extends Request {
-  user?: {
-    _id: string;
-    email?: string;
-    role?: string;
-  };
-}
+import QuizCategory from "../models/quizCategory.model";
+import SubscriptionPlan from "../models/subscription.model";
+import { AuthenticatedRequest } from "../middlewares/isLoggedIn";
+import { User } from "../models/user.model";
 
 const percent = (correct: number, total: number) => {
   if (!total) return 0;
@@ -22,6 +18,19 @@ const formatDuration = (seconds: number | null | undefined) => {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${String(s).padStart(2, "0")}`;
+};
+
+const safePercent = (a: number, b: number) => {
+  if (!b) return 0;
+  return Math.round((a / b) * 100);
+};
+
+const getMotivationMessage = (rank: number | null) => {
+  if (rank === null) return "Play quizzes to get ranked";
+  if (rank === 1) return "Outstanding! You are #1";
+  if (rank <= 3) return "Outstanding! You are one of the top performers";
+  if (rank <= 10) return "Great job! You're in the top 10";
+  return "Keep going! You can climb the leaderboard";
 };
 
 // quiz attempt summary
@@ -167,7 +176,7 @@ export const getUserCategoryStats = async (
     if (!userId) throw new AppError("Access Denied, Please login", 401);
 
     const rows = await QuizAttempt.aggregate([
-      { $match: { user: new mongoose.Types.ObjectId(userId) } },
+      { $match: { user: new mongoose.Types.ObjectId(String(userId)) } },
       {
         $group: {
           _id: "$category",
@@ -272,6 +281,199 @@ export const getUserRecentAttempts = async (
       statusCode: 200,
       message: "Recent quiz attempts fetched successfully",
       data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// get leaderboard summary
+export const getLeaderboardSummary = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user?._id) throw new AppError("Access Denied, Please login", 401);
+
+    const userObjectId = req.user._id;
+    const userIdStr = String(req.user._id);
+
+    const [attemptAgg, distinctCategories] = await Promise.all([
+      QuizAttempt.aggregate([
+        { $match: { user: userObjectId } },
+        {
+          $group: {
+            _id: "$user",
+            quizzesPlayed: { $sum: 1 },
+            totalCorrect: { $sum: "$correctAnswers" },
+            totalQuestions: { $sum: "$totalQuestions" },
+          },
+        },
+      ]),
+      QuizAttempt.distinct("category", { user: userObjectId }),
+    ]);
+
+    const attemptStats = attemptAgg[0] || {
+      quizzesPlayed: 0,
+      totalCorrect: 0,
+      totalQuestions: 0,
+    };
+
+    const categoriesPlayed = distinctCategories.length;
+
+    let totalCategoriesAvailable = 0;
+
+    if (req.user?.subscription?.isActive && req.user?.subscription?.plan) {
+      const plan = await SubscriptionPlan.findById(req.user.subscription.plan)
+        .select("allowedQuizCategories")
+        .lean();
+
+      totalCategoriesAvailable = plan?.allowedQuizCategories?.length || 0;
+    } else {
+      totalCategoriesAvailable = await QuizCategory.countDocuments();
+    }
+
+    const pendingCategories = Math.max(
+      totalCategoriesAvailable - categoriesPlayed,
+      0
+    );
+
+    const completedPercent = safePercent(
+      categoriesPlayed,
+      totalCategoriesAvailable || categoriesPlayed || 1
+    );
+    const pendingPercent = 100 - completedPercent;
+
+    let points: number | null = null;
+    let rank: number | null = null;
+
+    if (redisClient.isOpen) {
+      const score = await redisClient.zScore("leaderboard:all", userIdStr);
+      const r0 = await redisClient.zRevRank("leaderboard:all", userIdStr);
+      points = typeof score === "number" ? score : 0;
+      rank = typeof r0 === "number" ? r0 + 1 : null;
+    } else {
+      points = null;
+      rank = null;
+    }
+
+    return res.status(200).json({
+      status: true,
+      statusCode: 200,
+      message: "Leaderboard summary fetched successfully",
+      data: {
+        quizzesPlayed: attemptStats.quizzesPlayed || 0,
+        points,
+        yourPosition: rank,
+        message: getMotivationMessage(rank),
+        performance: {
+          accuracyPercent: safePercent(
+            attemptStats.totalCorrect || 0,
+            attemptStats.totalQuestions || 0
+          ),
+        },
+        categoryProgress: {
+          totalCategoriesAvailable,
+          completedCategories: categoriesPlayed,
+          pendingCategories,
+          completedPercent,
+          pendingPercent,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// get full leaderboard list
+export const getLeaderboardFullList = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!redisClient.isOpen) throw new AppError("Leaderboard unavailable", 503);
+
+    const limit = Math.min(Number(req.query.limit) || 10, 50);
+    const page = Math.max(Number(req.query.page) || 1, 1);
+
+    const start = (page - 1) * limit;
+    const end = start + limit - 1;
+
+    const raw = await redisClient.zRangeWithScores(
+      "leaderboard:all",
+      start,
+      end,
+      { REV: true }
+    );
+
+    const userIds = raw.map((r) => r.value);
+
+    const users = await User.find({ _id: { $in: userIds } })
+      .select("fullName email avatar role")
+      .lean();
+
+    const userMap = new Map(users.map((u) => [String(u._id), u]));
+
+    const list = raw.map((entry, i) => {
+      const u = userMap.get(entry.value);
+      return {
+        rank: start + i + 1,
+        userId: entry.value,
+        fullName: u?.fullName || null,
+        email: u?.email || null,
+        avatar: u?.avatar || null,
+        role: u?.role || null,
+        points: entry.score,
+      };
+    });
+
+    const topRaw = await redisClient.zRangeWithScores("leaderboard:all", 0, 2, {
+      REV: true,
+    });
+    const topIds = topRaw.map((r) => r.value);
+
+    const topUsers = await User.find({ _id: { $in: topIds } })
+      .select("fullName avatar")
+      .lean();
+    const topMap = new Map(topUsers.map((u) => [String(u._id), u]));
+
+    const top3 = topRaw.map((entry, idx) => {
+      const u = topMap.get(entry.value);
+      return {
+        rank: idx + 1,
+        userId: entry.value,
+        fullName: u?.fullName || null,
+        avatar: u?.avatar || null,
+        points: entry.score,
+      };
+    });
+
+    let me: any = null;
+    if (req.user?._id) {
+      const meId = String(req.user._id);
+      const score = await redisClient.zScore("leaderboard:all", meId);
+      const r0 = await redisClient.zRevRank("leaderboard:all", meId);
+      me = {
+        userId: meId,
+        rank: typeof r0 === "number" ? r0 + 1 : null,
+        points: typeof score === "number" ? score : 0,
+      };
+    }
+
+    return res.status(200).json({
+      status: true,
+      statusCode: 200,
+      message: "Leaderboard list fetched successfully",
+      data: {
+        page,
+        limit,
+        top3,
+        list,
+        me,
+      },
     });
   } catch (error) {
     next(error);
