@@ -6,6 +6,7 @@ import {
   logoutUser,
   resendOtp,
   resetPassword,
+  resetRefreshTokenFromAccessToken,
   signupUser,
   verifyOtp,
 } from "../controllers/auth.controller";
@@ -20,6 +21,9 @@ router.route("/resend-otp").post(resendOtp);
 router.route("/verify-otp").post(verifyOtp);
 router.route("/reset-password").post(resetPassword);
 router.route("/change-password").patch(isLoggedIn, changePassword);
+router
+  .route("/reset-refresh-token")
+  .post(isLoggedIn, resetRefreshTokenFromAccessToken);
 router.route("/logout").post(isLoggedIn, logoutUser);
 
 export default router;

@@ -358,3 +358,46 @@ export const changePassword = async (
     next(error);
   }
 };
+
+// reset refresh token from access token
+export const resetRefreshTokenFromAccessToken = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?._id;
+
+    if (!userId) {
+      throw new AppError("Access Denied, Please login", 401);
+    }
+
+    const user = await User.findById(userId);
+    if (!user) throw new AppError("User not found", 404);
+
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.generateRefreshToken();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return res.status(200).json({
+      status: true,
+      statusCode: 200,
+      message: "Refresh token reset successfully",
+      data: {
+        _id: user._id,
+        fullName: user.fullName,
+        email: user.email,
+        avatar: user.avatar || null,
+        role: user.role,
+        token: {
+          accessToken,
+          refreshToken,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
