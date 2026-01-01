@@ -9,16 +9,17 @@ import {
 } from "../controllers/quiz.controller";
 import { isLoggedIn } from "../middlewares/isLoggedIn";
 import { canAccessQuizCategory } from "../middlewares/canAccessQuizCategory.middleware";
+import { isAdmin } from "../middlewares/isAdmin";
 
 const router = express.Router();
 
-router.route("/").post(isLoggedIn, createQuiz).get(getAllQuizzes);
+router.route("/").post(isLoggedIn, isAdmin, createQuiz).get(getAllQuizzes);
 
 router
   .route("/:id")
-  .put(isLoggedIn, updateQuiz)
+  .put(isLoggedIn, isAdmin, updateQuiz)
   .get(isLoggedIn, canAccessQuizCategory, getSingleQuiz)
-  .delete(isLoggedIn, deleteQuiz);
+  .delete(isLoggedIn, isAdmin, deleteQuiz);
 
 router
   .route("/:categoryName")
