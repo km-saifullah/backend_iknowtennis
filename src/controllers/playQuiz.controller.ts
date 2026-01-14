@@ -81,69 +81,134 @@ export const startQuiz = async (
 };
 
 // submit quiz
+// export const submitQuiz = async (
+//   req: AuthenticatedRequest,
+//   res: Response,
+//   next: NextFunction
+// ): Promise<void> => {
+//   try {
+//     const { categoryId, answers, timeTakenSeconds } = req.body as {
+//       categoryId: string;
+//       answers: SubmitAnswerDTO[];
+//       timeTakenSeconds?: number;
+//     };
+
+//     if (!categoryId || !answers?.length) {
+//       throw new AppError("Invalid submission data", 400);
+//     }
+
+//     let totalScore = 0;
+//     let correctAnswers = 0;
+
+//     const resultAnswers = [];
+
+//     for (const ans of answers) {
+//       const question = await Quiz.findById(ans.questionId);
+//       if (!question) continue;
+
+//       const isCorrect = question.quizAnswer === ans.selectedOption;
+//       const point = isCorrect ? question.quizPoint : 0;
+
+//       if (isCorrect) {
+//         totalScore += point;
+//         correctAnswers++;
+//       }
+
+//       resultAnswers.push({
+//         question: question._id,
+//         selectedOption: ans.selectedOption,
+//         correctOption: question.quizAnswer,
+//         isCorrect,
+//         point,
+//       });
+//     }
+
+//     const attempt = await QuizAttempt.create({
+//       user: req.user!._id,
+//       category: categoryId,
+//       answers: resultAnswers,
+//       totalScore,
+//       correctAnswers,
+//       totalQuestions: resultAnswers.length,
+//       timeTakenSeconds:
+//         typeof timeTakenSeconds === "number" ? timeTakenSeconds : null,
+//     });
+
+//     await updateLeaderboardRealtime(req.user!._id.toString(), totalScore);
+
+//     res.status(201).json({
+//       status: true,
+//       statusCode: 201,
+//       message: "Quiz submitted successfully",
+//       data: {
+//         attemptId: attempt._id,
+//         totalScore,
+//         correctAnswers,
+//       },
+//     });
+//   } catch (error) {
+//     next(error);
+//   }
+// };
+
 export const submitQuiz = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
   try {
-    const { categoryId, answers, timeTakenSeconds } = req.body as {
-      categoryId: string;
-      answers: SubmitAnswerDTO[];
-      timeTakenSeconds?: number;
-    };
+    const { categoryId, selectedOption, questionId } = req.body;
 
-    if (!categoryId || !answers?.length) {
+    if (!categoryId || !selectedOption || !questionId) {
       throw new AppError("Invalid submission data", 400);
     }
 
-    let totalScore = 0;
-    let correctAnswers = 0;
+    const question = await Quiz.findById(questionId);
+    if (!question) throw new AppError("Question not found", 404);
 
-    const resultAnswers = [];
+    const isCorrect = question.quizAnswer === selectedOption;
+    const point = isCorrect ? question.quizPoint : 0;
 
-    for (const ans of answers) {
-      const question = await Quiz.findById(ans.questionId);
-      if (!question) continue;
+    // Save the answer in the QuizAttempt collection (or another suitable collection)
+    const answer = {
+      questionId,
+      selectedOption,
+      isCorrect,
+      point,
+    };
 
-      const isCorrect = question.quizAnswer === ans.selectedOption;
-      const point = isCorrect ? question.quizPoint : 0;
+    // Create or update the quiz attempt entry for this single question answer
+    const attempt = await QuizAttempt.findOneAndUpdate(
+      {
+        user: req.user!._id,
+        category: categoryId,
+        // Filter for the ongoing quiz attempt
+      },
+      {
+        $push: { answers: answer },
+        $inc: {
+          totalScore: point,
+          correctAnswers: isCorrect ? 1 : 0,
+        },
+        $set: { totalQuestions: 1 }, // Adjust the total questions for the current attempt
+      },
+      { upsert: true, new: true }
+    );
 
-      if (isCorrect) {
-        totalScore += point;
-        correctAnswers++;
-      }
+    // Update the leaderboard in Redis
+    await updateLeaderboardRealtime(
+      req.user!._id.toString(),
+      attempt.totalScore
+    );
 
-      resultAnswers.push({
-        question: question._id,
-        selectedOption: ans.selectedOption,
-        correctOption: question.quizAnswer,
-        isCorrect,
-        point,
-      });
-    }
-
-    const attempt = await QuizAttempt.create({
-      user: req.user!._id,
-      category: categoryId,
-      answers: resultAnswers,
-      totalScore,
-      correctAnswers,
-      totalQuestions: resultAnswers.length,
-      timeTakenSeconds:
-        typeof timeTakenSeconds === "number" ? timeTakenSeconds : null,
-    });
-
-    await updateLeaderboardRealtime(req.user!._id.toString(), totalScore);
-
-    res.status(201).json({
+    // Return feedback for this question
+    res.status(200).json({
       status: true,
-      statusCode: 201,
-      message: "Quiz submitted successfully",
+      message: "Answer submitted successfully",
       data: {
+        isCorrect,
+        correctAnswer: question.quizAnswer,
         attemptId: attempt._id,
-        totalScore,
-        correctAnswers,
       },
     });
   } catch (error) {
