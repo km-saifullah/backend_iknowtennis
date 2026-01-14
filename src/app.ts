@@ -9,6 +9,7 @@ import userRoouter from "./routes/user.routes";
 import playQuizRouter from "./routes/playQuiz.routes";
 import quizStatsRouter from "./routes/quizStats.routes";
 import adminDashboardRouter from "./routes/dashboard.routes";
+import jokeRouter from "./routes/joke.routes";
 
 const app = express();
 
@@ -43,6 +44,9 @@ app.use("/api/v1/play-quiz", playQuizRouter);
 
 // quiz attempt stats routes
 app.use("/api/v1/quiz-stats", quizStatsRouter);
+
+// joke routes
+app.use("/api/v1/joke", jokeRouter);
 
 // admin dashboard routes
 app.use("/api/v1/dashboard", adminDashboardRouter);
