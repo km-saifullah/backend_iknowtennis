@@ -9,7 +9,6 @@ import { updateLeaderboardRealtime } from "../services/leaderboard.service";
 import { User } from "../models/user.model";
 import { getRandomJoke } from "./joke.controller";
 import Joke from "../models/joke.model";
-import { getAllowedCategoryIdsForUser } from "../utils/getAllowedCategories";
 
 interface SubmitAnswerDTO {
   questionId: string;
@@ -40,15 +39,10 @@ const fetchRandomJoke = async () => {
 export const startQuiz = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const { categoryId } = req.params;
-
-    const allowed = await getAllowedCategoryIdsForUser(req.user);
-    if (!allowed.includes(String(categoryId))) {
-      throw new AppError("This category is locked. Please upgrade.", 403);
-    }
 
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
       throw new AppError("Invalid quiz category", 400);
@@ -173,7 +167,7 @@ export const startQuiz = async (
 export const submitQuiz = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const { categoryId, selectedOption, questionId } = req.body;
@@ -212,12 +206,12 @@ export const submitQuiz = async (
         },
         $set: { totalQuestions },
       },
-      { upsert: true, new: true },
+      { upsert: true, new: true }
     );
 
     await updateLeaderboardRealtime(
       req.user!._id.toString(),
-      attempt.totalScore,
+      attempt.totalScore
     );
 
     const totalAnsweredQuestions = attempt.answers.length;
@@ -256,12 +250,12 @@ export const submitQuiz = async (
 export const getQuizResult = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const result = await QuizAttempt.findById(req.params.attemptId).populate(
       "answers.question",
-      "quizQuestion quizOptions",
+      "quizQuestion quizOptions"
     );
 
     if (!result) {
@@ -283,7 +277,7 @@ export const getQuizResult = async (
 export const getPerformance = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ): Promise<void> => {
   try {
     const stats = await QuizAttempt.aggregate([
@@ -317,7 +311,7 @@ export const getPerformance = async (
 export const getLeaderboard = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction,
+  next: NextFunction
 ): Promise<void> => {
   try {
     if (!redisClient.isOpen) {
