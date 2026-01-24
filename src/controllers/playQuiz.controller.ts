@@ -39,7 +39,7 @@ const fetchRandomJoke = async () => {
 export const startQuiz = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const { categoryId } = req.params;
@@ -94,151 +94,69 @@ export const startQuiz = async (
 };
 
 // submit quiz
-// export const submitQuiz = async (
-//   req: AuthenticatedRequest,
-//   res: Response,
-//   next: NextFunction
-// ): Promise<void> => {
-//   try {
-//     const { categoryId, answers, timeTakenSeconds } = req.body as {
-//       categoryId: string;
-//       answers: SubmitAnswerDTO[];
-//       timeTakenSeconds?: number;
-//     };
-
-//     if (!categoryId || !answers?.length) {
-//       throw new AppError("Invalid submission data", 400);
-//     }
-
-//     let totalScore = 0;
-//     let correctAnswers = 0;
-
-//     const resultAnswers = [];
-
-//     for (const ans of answers) {
-//       const question = await Quiz.findById(ans.questionId);
-//       if (!question) continue;
-
-//       const isCorrect = question.quizAnswer === ans.selectedOption;
-//       const point = isCorrect ? question.quizPoint : 0;
-
-//       if (isCorrect) {
-//         totalScore += point;
-//         correctAnswers++;
-//       }
-
-//       resultAnswers.push({
-//         question: question._id,
-//         selectedOption: ans.selectedOption,
-//         correctOption: question.quizAnswer,
-//         isCorrect,
-//         point,
-//       });
-//     }
-
-//     const attempt = await QuizAttempt.create({
-//       user: req.user!._id,
-//       category: categoryId,
-//       answers: resultAnswers,
-//       totalScore,
-//       correctAnswers,
-//       totalQuestions: resultAnswers.length,
-//       timeTakenSeconds:
-//         typeof timeTakenSeconds === "number" ? timeTakenSeconds : null,
-//     });
-
-//     await updateLeaderboardRealtime(req.user!._id.toString(), totalScore);
-
-//     res.status(201).json({
-//       status: true,
-//       statusCode: 201,
-//       message: "Quiz submitted successfully",
-//       data: {
-//         attemptId: attempt._id,
-//         totalScore,
-//         correctAnswers,
-//       },
-//     });
-//   } catch (error) {
-//     next(error);
-//   }
-// };
-
 export const submitQuiz = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
-    const { categoryId, selectedOption, questionId } = req.body;
+    const { categoryId, answers, timeTakenSeconds } = req.body as {
+      categoryId: string;
+      answers: SubmitAnswerDTO[];
+      timeTakenSeconds?: number;
+    };
 
-    if (!categoryId || !selectedOption || !questionId) {
+    if (!categoryId || !answers?.length) {
       throw new AppError("Invalid submission data", 400);
     }
 
-    const question = await Quiz.findById(questionId);
-    if (!question) throw new AppError("Question not found", 404);
+    let totalScore = 0;
+    let correctAnswers = 0;
 
-    const isCorrect = question.quizAnswer === selectedOption;
-    const point = isCorrect ? question.quizPoint : 0;
+    const resultAnswers = [];
 
-    const answer = {
-      questionId,
-      selectedOption,
-      isCorrect,
-      point,
-    };
+    for (const ans of answers) {
+      const question = await Quiz.findById(ans.questionId);
+      if (!question) continue;
 
-    const totalQuestions = await Quiz.countDocuments({
-      quizCategory: categoryId,
-    });
+      const isCorrect = question.quizAnswer === ans.selectedOption;
+      const point = isCorrect ? question.quizPoint : 0;
 
-    const attempt = await QuizAttempt.findOneAndUpdate(
-      {
-        user: req.user!._id,
-        category: categoryId,
-      },
-      {
-        $push: { answers: answer },
-        $inc: {
-          totalScore: point,
-          correctAnswers: isCorrect ? 1 : 0,
-        },
-        $set: { totalQuestions },
-      },
-      { upsert: true, new: true }
-    );
+      if (isCorrect) {
+        totalScore += point;
+        correctAnswers++;
+      }
 
-    await updateLeaderboardRealtime(
-      req.user!._id.toString(),
-      attempt.totalScore
-    );
-
-    const totalAnsweredQuestions = attempt.answers.length;
-
-    if (totalAnsweredQuestions === totalQuestions) {
-      const joke = await fetchRandomJoke();
-
-      res.status(200).json({
-        status: true,
-        message: "Answer submitted successfully, here's a joke:",
-        data: {
-          isCorrect,
-          correctAnswer: question.quizAnswer,
-          attemptId: attempt._id,
-          joke: joke.text,
-          jokeImageUrl: joke.imageUrl,
-        },
+      resultAnswers.push({
+        question: question._id,
+        selectedOption: ans.selectedOption,
+        correctOption: question.quizAnswer,
+        isCorrect,
+        point,
       });
     }
 
-    res.status(200).json({
+    const attempt = await QuizAttempt.create({
+      user: req.user!._id,
+      category: categoryId,
+      answers: resultAnswers,
+      totalScore,
+      correctAnswers,
+      totalQuestions: resultAnswers.length,
+      timeTakenSeconds:
+        typeof timeTakenSeconds === "number" ? timeTakenSeconds : null,
+    });
+
+    await updateLeaderboardRealtime(req.user!._id.toString(), totalScore);
+
+    res.status(201).json({
       status: true,
-      message: "Answer submitted successfully",
+      statusCode: 201,
+      message: "Quiz submitted successfully",
       data: {
-        isCorrect,
-        correctAnswer: question.quizAnswer,
         attemptId: attempt._id,
+        totalScore,
+        correctAnswers,
       },
     });
   } catch (error) {
@@ -250,12 +168,12 @@ export const submitQuiz = async (
 export const getQuizResult = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const result = await QuizAttempt.findById(req.params.attemptId).populate(
       "answers.question",
-      "quizQuestion quizOptions"
+      "quizQuestion quizOptions",
     );
 
     if (!result) {
@@ -277,7 +195,7 @@ export const getQuizResult = async (
 export const getPerformance = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     const stats = await QuizAttempt.aggregate([
@@ -311,7 +229,7 @@ export const getPerformance = async (
 export const getLeaderboard = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): Promise<void> => {
   try {
     if (!redisClient.isOpen) {

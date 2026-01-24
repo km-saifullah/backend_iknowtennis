@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { isValidEmail } from "../utils/email.validators";
 import { AppError } from "../utils/AppError";
 import { User } from "../models/user.model";
 import { sendEmail } from "../utils/sendEmail";
 import { generatePasswordResetEmail } from "../utils/emailTemplate";
+import { freePlanId } from "../config";
 
 interface AuthenticatedRequest extends Request {
   user?: {
@@ -20,7 +22,7 @@ interface AuthenticatedRequest extends Request {
 export const signupUser = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { fullName, email, phone, password, confirmPassword } = req.body;
@@ -47,6 +49,12 @@ export const signupUser = async (
       password,
     });
 
+    newUser.subscription = {
+      plan: new mongoose.Types.ObjectId(freePlanId),
+      isActive: true,
+      expiresAt: null as any,
+    };
+
     await newUser.save();
 
     return res.status(201).json({
@@ -65,7 +73,7 @@ export const signupUser = async (
 export const loginUser = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, password } = req.body;
@@ -112,7 +120,7 @@ export const loginUser = async (
 export const forgotPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
@@ -148,7 +156,7 @@ export const forgotPassword = async (
 export const resendOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email } = req.body;
@@ -160,7 +168,7 @@ export const resendOtp = async (
 
     if (user.otpExpire && user.otpExpire > new Date()) {
       const remaining = Math.ceil(
-        (user.otpExpire.getTime() - Date.now()) / 1000
+        (user.otpExpire.getTime() - Date.now()) / 1000,
       );
       return res.status(429).json({
         status: false,
@@ -202,7 +210,7 @@ export const resendOtp = async (
 export const verifyOtp = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, otp } = req.body;
@@ -232,7 +240,7 @@ export const verifyOtp = async (
 export const resetPassword = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, password, confirmPassword } = req.body;
@@ -269,7 +277,7 @@ export const resetPassword = async (
 export const logoutUser = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?._id;
@@ -300,7 +308,7 @@ export const logoutUser = async (
 export const changePassword = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
@@ -316,7 +324,7 @@ export const changePassword = async (
     if (currentPassword === newPassword) {
       throw new AppError(
         "New password must be different from current password",
-        400
+        400,
       );
     }
 
@@ -349,7 +357,7 @@ export const changePassword = async (
 export const resetRefreshTokenFromAccessToken = async (
   req: AuthenticatedRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const userId = req.user?._id;

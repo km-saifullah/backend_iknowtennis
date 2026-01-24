@@ -19,6 +19,9 @@ export const cloudinaryApiKey: string = process.env.CLOUDINARY_API_KEY || "";
 export const cloudinaryApiSecret: string =
   process.env.CLOUDINARY_API_SECRET || "";
 
+export const freePlanId = process.env.FREE_PLAN_ID as string;
+export const premiumPlanName = process.env.PREMIUM_PLAN_NAME || "PREMIUM";
+
 export const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
 export const stripeSecretKey = process.env.STRIPE_SECRET_KEY;

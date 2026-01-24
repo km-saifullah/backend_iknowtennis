@@ -18,15 +18,15 @@ router.get("/performance", getPerformance);
 
 router.get("/leaderboard", getLeaderboard);
 
-router.get("/result/:attemptId", getQuizResult);
+router.get("/result/:attemptId", isLoggedIn, getQuizResult);
 
-router.post("/submit", submitQuiz);
+router.post("/submit", isLoggedIn, canAccessQuizCategory, submitQuiz);
 
 router.get(
   "/category/:categoryId",
-  hasActiveSubscription,
+  isLoggedIn,
   canAccessQuizCategory,
-  startQuiz
+  startQuiz,
 );
 
 export default router;
