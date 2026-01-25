@@ -7,7 +7,7 @@ import { AppError } from "../utils/AppError";
 export const createQuiz = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { quizCategory, quizzes } = req.body;
@@ -22,7 +22,13 @@ export const createQuiz = async (
     const validatedQuizzes = [];
 
     for (const quiz of quizzes) {
-      const { quizQuestion, quizOptions, quizAnswer, quizPoint } = quiz;
+      const {
+        quizQuestion,
+        quizOptions,
+        quizAnswer,
+        quizAnswerExplanation,
+        quizPoint,
+      } = quiz;
 
       if (!quizQuestion || !quizOptions || !quizAnswer) {
         throw new AppError("Missing required fields in quiz", 400);
@@ -32,7 +38,7 @@ export const createQuiz = async (
       if (existingQuiz) {
         throw new AppError(
           `Quiz question "${quizQuestion}" already exists`,
-          400
+          400,
         );
       }
 
@@ -41,6 +47,7 @@ export const createQuiz = async (
         quizQuestion,
         quizOptions,
         quizAnswer,
+        quizAnswerExplanation,
         quizPoint: quizPoint || 0,
         isActive: quiz.isActive !== undefined ? quiz.isActive : true,
       });
@@ -55,12 +62,12 @@ export const createQuiz = async (
           currentQuizCount: createdQuizzes.length,
           currentQuizPoints: createdQuizzes.reduce(
             (acc, q) => acc + q.quizPoint,
-            0
+            0,
           ),
         },
         $push: { quizzes: { $each: createdQuizzes.map((q) => q._id) } },
       },
-      { new: true }
+      { new: true },
     );
 
     return res.status(201).json({
@@ -78,7 +85,7 @@ export const createQuiz = async (
 export const updateQuiz = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -104,6 +111,8 @@ export const updateQuiz = async (
     quiz.quizQuestion = req.body.quizQuestion ?? quiz.quizQuestion;
     quiz.quizOptions = req.body.quizOptions ?? quiz.quizOptions;
     quiz.quizAnswer = req.body.quizAnswer ?? quiz.quizAnswer;
+    quiz.quizAnswerExplanation =
+      req.body.quizAnswerExplanation ?? quiz.quizAnswerExplanation;
 
     await quiz.save();
     await quizCategory.save();
@@ -123,7 +132,7 @@ export const updateQuiz = async (
 export const getAllQuizzes = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
@@ -195,14 +204,14 @@ export const getAllQuizzes = async (
 export const getSingleQuiz = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
 
     const quiz = await Quiz.findById(id).populate(
       "quizCategory",
-      "quizCategoryName quizPoint quizCount"
+      "quizCategoryName quizPoint quizCount",
     );
 
     if (!quiz) throw new AppError("Quiz not found", 404);
@@ -222,7 +231,7 @@ export const getSingleQuiz = async (
 export const getQuizzesByCategoryName = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { categoryName } = req.params;
@@ -252,7 +261,7 @@ export const getQuizzesByCategoryName = async (
 export const deleteQuiz = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;

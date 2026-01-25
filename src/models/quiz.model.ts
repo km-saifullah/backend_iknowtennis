@@ -5,6 +5,7 @@ export interface IQuiz extends mongoose.Document {
   quizQuestion: string;
   quizOptions: string[];
   quizAnswer: string;
+  quizAnswerExplanation: string;
   quizPoint: number;
   isActive: boolean;
 }
@@ -36,6 +37,9 @@ const quizSchema = new mongoose.Schema<IQuiz>(
       type: String,
       required: true,
     },
+    quizAnswerExplanation: {
+      type: String,
+    },
     quizPoint: {
       type: Number,
       required: true,
@@ -46,7 +50,7 @@ const quizSchema = new mongoose.Schema<IQuiz>(
       default: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // check the correct answer must include in the quiz options
